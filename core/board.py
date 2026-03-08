@@ -63,6 +63,7 @@ class Board:
     CASTLE_BLACK_QUEENSIDE = 1 << 3
 
     STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    BASE_PIECE_COUNTS: dict[str, int] = {"p": 8, "n": 2, "b": 2, "r": 2, "q": 1}
 
     # Handles __init__ operations.
     def __init__(self) -> None:
@@ -458,6 +459,10 @@ class Board:
                         moves.append(Move(piece.x, piece.y, piece.x, piece.y - 2, is_castling=True))
 
         return moves
+
+    # Handles pseudo_moves_for_piece operations.
+    def pseudo_moves_for_piece(self, piece: "Piece") -> list[Move]:
+        return self._pseudo_moves_for_piece(piece)
 
     # Handles _can_castle operations.
     def _can_castle(self, color: bool, kingside: bool) -> bool:
@@ -975,3 +980,34 @@ class Board:
             or self.is_draw_by_threefold_repetition()
             or self.is_draw_by_insufficient_material()
         )
+
+    # Handles material_points operations.
+    def material_points(self, color: bool) -> int:
+        return sum(piece.value for piece in self.iter_pieces(color) if piece.abbreviation.lower() != "k")
+
+    # Handles material_balance operations.
+    def material_balance(self) -> int:
+        return self.material_points(True) - self.material_points(False)
+
+    # Handles captured_piece_counts operations.
+    def captured_piece_counts(self) -> tuple[dict[str, int], dict[str, int]]:
+        current_white: dict[str, int] = {code: 0 for code in self.BASE_PIECE_COUNTS}
+        current_black: dict[str, int] = {code: 0 for code in self.BASE_PIECE_COUNTS}
+
+        for piece in self.iter_pieces():
+            code = piece.abbreviation.lower()
+            if code not in self.BASE_PIECE_COUNTS:
+                continue
+            if piece.color:
+                current_white[code] += 1
+            else:
+                current_black[code] += 1
+
+        captured_by_black: dict[str, int] = {}
+        captured_by_white: dict[str, int] = {}
+        for code, baseline in self.BASE_PIECE_COUNTS.items():
+            white_survivors = min(current_white[code], baseline)
+            black_survivors = min(current_black[code], baseline)
+            captured_by_black[code] = baseline - white_survivors
+            captured_by_white[code] = baseline - black_survivors
+        return captured_by_white, captured_by_black

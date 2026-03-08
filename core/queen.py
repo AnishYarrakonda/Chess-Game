@@ -11,6 +11,7 @@ class Queen(Piece):
     def __init__(self, x: int, y: int, color: bool, board: Board) -> None:
         super().__init__(x, y, color, board)
         self.name = 'Queen'
+        self.value = 9
         self.abbreviation = 'Q' if color else 'q'
 
     # gets all valid moves for the queen by sliding in all 8 directions

@@ -17,6 +17,7 @@ class Piece(ABC):
         self.board: Board = board
         self.has_moved: bool = False
         self.name: str = self.__class__.__name__
+        self.value: int = 0
         self.abbreviation: str = ""
 
     # moves the piece to a new position and updates the board state

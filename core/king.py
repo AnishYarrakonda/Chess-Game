@@ -11,6 +11,7 @@ class King(Piece):
     def __init__(self, x: int, y: int, color: bool, board: Board) -> None:
         super().__init__(x, y, color, board)
         self.name = 'King'
+        self.value = 0
         self.abbreviation = 'K' if color else 'k'
 
     # gets all valid moves for the king by checking adjacent squares

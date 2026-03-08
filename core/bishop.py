@@ -11,6 +11,7 @@ class Bishop(Piece):
     def __init__(self, x: int, y: int, color: bool, board: Board) -> None:
         super().__init__(x, y, color, board)
         self.name = 'Bishop'
+        self.value = 3
         self.abbreviation = 'B' if color else 'b'
 
     # gets all valid moves for the bishop by sliding in diagonal directions

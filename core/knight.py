@@ -11,6 +11,7 @@ class Knight(Piece):
     def __init__(self, x: int, y: int, color: bool, board: Board) -> None:
         super().__init__(x, y, color, board)
         self.name = 'Knight'
+        self.value = 3
         self.abbreviation = 'N' if color else 'n'
 
     # gets all valid moves for the knight by checking all 8 possible L-shaped moves

@@ -11,6 +11,7 @@ class Pawn(Piece):
     def __init__(self, x: int, y: int, color: bool, board: Board) -> None:
         super().__init__(x, y, color, board)
         self.name = 'Pawn'
+        self.value = 1
         self.abbreviation = 'P' if color else 'p'
 
     # gets valid moves for the pawn, including forward moves and captures
