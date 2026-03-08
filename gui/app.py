@@ -160,7 +160,7 @@ class ChessGUI(tk.Tk):
         self.moves_list.grid(row=0, column=0, sticky="nsew")
         self.moves_scrollbar = ttk.Scrollbar(move_box, orient=tk.VERTICAL, command=self._on_moves_scrollbar)
         self.moves_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.moves_list.configure(yscrollcommand=self._on_moves_list_scroll)
+        self.moves_list.configure(yscrollcommand=self._on_moves_list_scroll) # type: ignore
 
         self.mode_label = ttk.Label(notation_panel, text="Mode: Play", font=("Arial", 10, "bold"))
         self.mode_label.grid(row=2, column=0, sticky="w", pady=(4, 2))
@@ -228,7 +228,7 @@ class ChessGUI(tk.Tk):
 
     # Handles _on_moves_scrollbar operations.
     def _on_moves_scrollbar(self, *args: str) -> None:
-        cast(Any, self.moves_list.yview)(*args)
+        cast(Any, self.moves_list.yview)(*args) # type: ignore
 
     # Handles _on_moves_list_scroll operations.
     def _on_moves_list_scroll(self, first: str, last: str) -> None:
@@ -372,10 +372,10 @@ class ChessGUI(tk.Tk):
     def _on_notation_select(self, _event: tk.Event[tk.Misc]) -> None:
         if self.suppress_notation_select:
             return
-        selected = self.moves_list.curselection()
+        selected = self.moves_list.curselection()  # type: ignore
         if not selected:
             return
-        list_index = int(selected[0])
+        list_index = int(selected[0])  # type: ignore
         if not (0 <= list_index < len(self.notation_index_to_timeline)):
             return
         target_timeline = self.notation_index_to_timeline[list_index]
