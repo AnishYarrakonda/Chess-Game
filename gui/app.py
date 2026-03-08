@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import io
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
@@ -14,6 +15,11 @@ try:
 except ModuleNotFoundError:
     Image = None
     ImageTk = None
+
+try:
+    import cairosvg # type: ignore
+except ModuleNotFoundError:
+    cairosvg = None
 
 
 # Defines the DragState type.
@@ -32,7 +38,8 @@ class ChessGUI(tk.Tk):
         self.title("Chess")
         self.geometry("1320x820")
         self.minsize(1040, 680)
-        self.configure(bg="#0f141b")
+        self.configure(bg="#262421")
+        self.ui_font_family: str = "Trebuchet MS"
 
         self.game: ChessGame = ChessGame()
         self.read_only_loaded_game: bool = False
@@ -71,6 +78,7 @@ class ChessGUI(tk.Tk):
 
         self.notation_index_to_timeline: list[int] = []
         self.suppress_notation_select: bool = False
+        self.warned_svg_support: bool = False
 
         self.symbols: dict[str, str] = {
             "K": "♔",
@@ -87,7 +95,7 @@ class ChessGUI(tk.Tk):
             "p": "♟",
         }
 
-        self.image_dir: Path = Path("assets/pieces")
+        self.image_dir: Path = Path(__file__).resolve().parents[1] / "piece_images"
         self.image_cache: dict[tuple[str, int], Any] = {}
 
         self._build_layout()
@@ -98,41 +106,41 @@ class ChessGUI(tk.Tk):
     def _build_layout(self) -> None:
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure(".", background="#0f141b", foreground="#d9e1ea")
-        style.configure("TFrame", background="#0f141b")
-        style.configure("TLabel", background="#0f141b", foreground="#d9e1ea")
-        style.configure("TLabelframe", background="#121a23", foreground="#9fb3c8", bordercolor="#24303d")
-        style.configure("TLabelframe.Label", background="#121a23", foreground="#9fb3c8")
-        style.configure("TScrollbar", background="#1c2734", troughcolor="#0f141b")
-        style.configure("TCombobox", fieldbackground="#1a2330", background="#1a2330", foreground="#d9e1ea")
+        style.configure(".", background="#262421", foreground="#d8d5cf", font=(self.ui_font_family, 12))
+        style.configure("TFrame", background="#262421")
+        style.configure("TLabel", background="#262421", foreground="#d8d5cf", font=(self.ui_font_family, 12))
+        style.configure("TLabelframe", background="#2f2c28", foreground="#b9b3a9", bordercolor="#3a3631")
+        style.configure("TLabelframe.Label", background="#2f2c28", foreground="#b9b3a9", font=(self.ui_font_family, 12, "bold"))
+        style.configure("TScrollbar", background="#3a3631", troughcolor="#262421")
+        style.configure("TCombobox", fieldbackground="#3a3631", background="#3a3631", foreground="#e4dfd7")
         style.configure(
             "Action.TButton",
-            font=("Segoe UI", 13, "bold"),
-            padding=(24, 18),
+            font=(self.ui_font_family, 13, "bold"),
+            padding=(12, 14),
             borderwidth=0,
             relief="flat",
-            foreground="#f4f7fb",
-            background="#2e3b4b",
+            foreground="#ede7dc",
+            background="#4a433d",
             focusthickness=0,
         )
         style.map(
             "Action.TButton",
-            background=[("pressed", "#1e2a36"), ("active", "#3e536a")],
-            foreground=[("pressed", "#ffffff"), ("active", "#ffffff")],
+            background=[("pressed", "#3a342f"), ("active", "#5d554d")],
+            foreground=[("pressed", "#fffaf0"), ("active", "#fffaf0")],
         )
 
         outer = ttk.Frame(self)
         outer.pack(fill=tk.BOTH, expand=True, padx=14, pady=14)
-        outer.columnconfigure(0, weight=7)  # board
-        outer.columnconfigure(1, weight=2)  # notation
-        outer.columnconfigure(2, weight=2)  # buttons
+        outer.columnconfigure(0, weight=1, minsize=620)  # board
+        outer.columnconfigure(1, weight=0, minsize=260)  # notation
+        outer.columnconfigure(2, weight=0, minsize=320)  # buttons
         outer.rowconfigure(0, weight=1)
 
         board_card = ttk.Frame(outer, padding=10)
         board_card.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         board_card.rowconfigure(0, weight=1)
         board_card.columnconfigure(0, weight=1)
-        self.canvas = tk.Canvas(board_card, highlightthickness=0, bg="#0f141b")
+        self.canvas = tk.Canvas(board_card, highlightthickness=0, bg="#262421")
         self.canvas.grid(row=0, column=0, sticky="nsew")
 
         notation_panel = ttk.Frame(outer, padding=10)
@@ -140,7 +148,7 @@ class ChessGUI(tk.Tk):
         notation_panel.columnconfigure(0, weight=1)
         notation_panel.rowconfigure(1, weight=1)
 
-        ttk.Label(notation_panel, text="Notation", font=("Georgia", 18, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        ttk.Label(notation_panel, text="Notation", font=(self.ui_font_family, 24, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 8))
 
         move_box = ttk.LabelFrame(notation_panel, text="Moves")
         move_box.grid(row=1, column=0, sticky="nsew")
@@ -150,10 +158,10 @@ class ChessGUI(tk.Tk):
         self.moves_list = tk.Listbox(
             move_box,
             activestyle="none",
-            font=("Menlo", 13),
-            bg="#1a2330",
-            fg="#d7e2ee",
-            selectbackground="#2f4258",
+            font=(self.ui_font_family, 18),
+            bg="#3a3631",
+            fg="#ece7de",
+            selectbackground="#5d554d",
             selectforeground="#ffffff",
             bd=0,
         )
@@ -162,15 +170,16 @@ class ChessGUI(tk.Tk):
         self.moves_scrollbar.grid(row=0, column=1, sticky="ns")
         self.moves_list.configure(yscrollcommand=self._on_moves_list_scroll) # type: ignore
 
-        self.mode_label = ttk.Label(notation_panel, text="Mode: Play", font=("Arial", 10, "bold"))
+        self.mode_label = ttk.Label(notation_panel, text="Mode: Play", font=(self.ui_font_family, 11, "bold"))
         self.mode_label.grid(row=2, column=0, sticky="w", pady=(4, 2))
 
         self.status_var = tk.StringVar(value="Ready")
-        ttk.Label(notation_panel, textvariable=self.status_var, foreground="#84a8cc").grid(row=3, column=0, sticky="ew")
+        ttk.Label(notation_panel, textvariable=self.status_var, foreground="#c9c4b8", font=(self.ui_font_family, 11)).grid(row=3, column=0, sticky="ew")
 
         controls_panel = ttk.Frame(outer, padding=10)
         controls_panel.grid(row=0, column=2, sticky="nsew")
         controls_panel.columnconfigure(0, weight=1)
+        controls_panel.rowconfigure(11, weight=1)
         controls_panel.columnconfigure(1, minsize=260)
 
         speed_frame = ttk.LabelFrame(controls_panel, text="Animation")
@@ -181,7 +190,7 @@ class ChessGUI(tk.Tk):
             state="readonly",
             values=list(self.speed_map.keys()),
             textvariable=self.animation_mode_var,
-            font=("Segoe UI", 11, "bold"),
+            font=(self.ui_font_family, 11, "bold"),
         )
         self.speed_combo.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
 
@@ -197,23 +206,23 @@ class ChessGUI(tk.Tk):
             ("Next", self._step_forward),
         ]
         for idx, (label, callback) in enumerate(buttons, start=1):
-            ttk.Button(controls_panel, text=label, command=callback, style="Action.TButton", width=18).grid(
+            ttk.Button(controls_panel, text=label, command=callback, style="Action.TButton", width=16).grid(
                 row=idx, column=0, sticky="ew", pady=5
             )
 
         material_box = ttk.LabelFrame(controls_panel, text="Material")
-        material_box.grid(row=10, column=0, sticky="ew", pady=(10, 0))
+        material_box.grid(row=12, column=0, sticky="ew", pady=(12, 0))
         material_box.columnconfigure(0, weight=1)
         self.material_var = tk.StringVar(value="Even material")
         self.captured_white_var = tk.StringVar(value="White captured: -")
         self.captured_black_var = tk.StringVar(value="Black captured: -")
-        ttk.Label(material_box, textvariable=self.material_var, font=("Segoe UI", 16, "bold")).grid(
+        ttk.Label(material_box, textvariable=self.material_var, font=(self.ui_font_family, 16, "bold")).grid(
             row=0, column=0, sticky="w", padx=12, pady=(10, 6)
         )
-        ttk.Label(material_box, textvariable=self.captured_white_var, font=("Segoe UI Symbol", 24, "bold")).grid(
+        ttk.Label(material_box, textvariable=self.captured_white_var, font=("DejaVu Sans", 26, "bold"), foreground="#e7e0d4").grid(
             row=1, column=0, sticky="w", padx=12, pady=4
         )
-        ttk.Label(material_box, textvariable=self.captured_black_var, font=("Segoe UI Symbol", 24, "bold")).grid(
+        ttk.Label(material_box, textvariable=self.captured_black_var, font=("DejaVu Sans", 26, "bold"), foreground="#e7e0d4").grid(
             row=2, column=0, sticky="w", padx=12, pady=(4, 10)
         )
 
@@ -379,6 +388,8 @@ class ChessGUI(tk.Tk):
         if not (0 <= list_index < len(self.notation_index_to_timeline)):
             return
         target_timeline = self.notation_index_to_timeline[list_index]
+        if target_timeline < 0:
+            return
         if self.game.go_to(target_timeline):
             self.last_move = self.game.last_move_for_index()
             self._refresh_all()
@@ -404,9 +415,11 @@ class ChessGUI(tk.Tk):
             self.moves_list.insert(tk.END, f"{move_no:>2}. {white:<8} {black}")
             timeline_idx = idx + 2 if idx + 1 < len(notations) else idx + 1
             self.notation_index_to_timeline.append(timeline_idx)
+            self.moves_list.insert(tk.END, "")
+            self.notation_index_to_timeline.append(-1)
 
         if self.game.timeline_index > 0:
-            active = (self.game.timeline_index - 1) // 2
+            active = ((self.game.timeline_index - 1) // 2) * 2
             if 0 <= active < self.moves_list.size():
                 self.moves_list.selection_clear(0, tk.END)
                 self.moves_list.selection_set(active)
@@ -493,11 +506,11 @@ class ChessGUI(tk.Tk):
         left = (self.canvas.winfo_width() - self.board_px) // 2 + self.margin
         top = (self.canvas.winfo_height() - self.board_px) // 2 + self.margin
 
-        light = "#2a3138"
-        dark = "#3b4650"
-        last_a = "#586a3d"
-        last_b = "#6c8248"
-        select_color = "#3b5675"
+        light = "#f0d9b5"
+        dark = "#b58863"
+        last_a = "#cdd26a"
+        last_b = "#aaa23a"
+        select_color = "#8ca2ad"
 
         for row in range(8):
             for col in range(8):
@@ -537,13 +550,13 @@ class ChessGUI(tk.Tk):
             file_char = chr(ord("a") + (7 - col if self.flipped else col))
             x = left + col * self.square_px + 4
             y = top + 8 * self.square_px - 4
-            self.canvas.create_text(x, y, text=file_char, anchor="sw", fill="#9bb6d2", font=("Arial", coord_size, "bold"))
+            self.canvas.create_text(x, y, text=file_char, anchor="sw", fill="#4e4b47", font=(self.ui_font_family, coord_size, "bold"))
 
         for row in range(8):
             rank_char = str(row + 1 if self.flipped else 8 - row)
             x = left + 4
             y = top + row * self.square_px + 12
-            self.canvas.create_text(x, y, text=rank_char, anchor="nw", fill="#9bb6d2", font=("Arial", coord_size, "bold"))
+            self.canvas.create_text(x, y, text=rank_char, anchor="nw", fill="#4e4b47", font=(self.ui_font_family, coord_size, "bold"))
 
     # Handles _draw_legal_targets operations.
     def _draw_legal_targets(self) -> None:
@@ -567,17 +580,30 @@ class ChessGUI(tk.Tk):
         if key in self.image_cache:
             return self.image_cache[key]
 
+        color_prefix = "w" if abbrev.isupper() else "b"
+        piece_letter = abbrev.upper()
         candidates = [
+            self.image_dir / f"{color_prefix}{piece_letter}.png",
+            self.image_dir / f"{color_prefix}{piece_letter}.svg",
             self.image_dir / f"{abbrev}.png",
             self.image_dir / f"{abbrev.lower()}.png",
-            self.image_dir / f"{'w' if abbrev.isupper() else 'b'}{abbrev.upper()}.png",
-            self.image_dir / f"{'w' if abbrev.isupper() else 'b'}_{abbrev.upper()}.png",
+            self.image_dir / f"{color_prefix}_{piece_letter}.png",
+            self.image_dir / f"{color_prefix}_{piece_letter}.svg",
         ]
         source = next((path for path in candidates if path.exists()), None)
         if source is None:
             return None
 
-        image = Image.open(source).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+        if source.suffix.lower() == ".svg":
+            if cairosvg is None:
+                if not self.warned_svg_support:
+                    self.status_var.set("Install cairosvg or use PNG piece images in piece_images/")
+                    self.warned_svg_support = True
+                return None
+            png_data = cairosvg.svg2png(url=str(source), output_width=size, output_height=size) # type: ignore
+            image = Image.open(io.BytesIO(png_data)).convert("RGBA") # type: ignore
+        else:
+            image = Image.open(source).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
         tk_image: Any = ImageTk.PhotoImage(image)
         self.image_cache[key] = tk_image
         return tk_image
