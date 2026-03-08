@@ -167,3 +167,72 @@ class Board:
         self.en_passant_target = None if en_passant == "-" else self._algebraic_to_square(en_passant)
         self.halfmove_clock = int(halfmove)
         self.fullmove_number = int(fullmove)
+
+    # find the white/black king's location
+    def find_king(self, color: bool) -> tuple[int, int]:
+        for x in range(8):
+            for y in range(8):
+                piece = self.grid[x][y]
+                if piece is not None and piece.abbreviation.lower() == "k" and piece.color == color:
+                    return x, y
+        raise ValueError(f"King not found for color: {color}")
+
+    # returns if a square is attacked by a given color
+    def is_square_attacked(self, x: int, y: int, by_color: bool) -> bool:
+        for row in self.grid:
+            for piece in row:
+                if piece is None or piece.color != by_color:
+                    continue
+
+                piece_code = piece.abbreviation.lower()
+
+                if piece_code == "p":
+                    direction = 1 if piece.color else -1
+                    attack_row = piece.x + direction
+                    if (attack_row, piece.y - 1) == (x, y) or (attack_row, piece.y + 1) == (x, y):
+                        return True
+                    continue
+
+                if piece_code == "k":
+                    if max(abs(piece.x - x), abs(piece.y - y)) == 1:
+                        return True
+                    continue
+
+                if (x, y) in piece.get_valid_moves():
+                    return True
+        return False
+
+    # returns if the white/black king is in check
+    def in_check(self, color: bool) -> bool:
+        king_x, king_y = self.find_king(color)
+        return self.is_square_attacked(king_x, king_y, not color)
+
+    # simulates a move and returns True if own king is left in check
+    def _move_leaves_king_in_check(self, piece: Piece, x: int, y: int) -> bool:
+        from_x, from_y = piece.x, piece.y
+        captured_piece = self.grid[x][y]
+        previous_has_moved = piece.has_moved
+
+        self.grid[from_x][from_y] = None
+        self.grid[x][y] = piece
+        piece.x = x
+        piece.y = y
+        piece.has_moved = True
+
+        in_check = self.in_check(piece.color)
+
+        piece.x = from_x
+        piece.y = from_y
+        piece.has_moved = previous_has_moved
+        self.grid[from_x][from_y] = piece
+        self.grid[x][y] = captured_piece
+
+        return in_check
+
+    # returns legal moves for a piece (pseudo-legal filtered by king safety)
+    def get_legal_moves(self, piece: Piece) -> list[tuple[int, int]]:
+        legal_moves: list[tuple[int, int]] = []
+        for x, y in piece.get_valid_moves():
+            if not self._move_leaves_king_in_check(piece, x, y):
+                legal_moves.append((x, y))
+        return legal_moves
