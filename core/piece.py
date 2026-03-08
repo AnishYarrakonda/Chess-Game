@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 class Piece(ABC):
 
     # constructor - use (x, y, color, board) to match subclasses
-    def __init__(self, x: int, y: int, color: bool, board: Board):
+    def __init__(self, x: int, y: int, color: bool, board: Board) -> None:
         self.color: bool = color
         self.x: int = x
         self.y: int = y
@@ -31,7 +31,7 @@ class Piece(ABC):
 
     # creates a generator that yields valid moves in a given direction 
     # until it hits the edge of the board or another piece
-    def slide(self, dx: int, dy: int):
+    def slide(self, dx: int, dy: int) -> Generator[tuple[int, int], None, None]:
         for step in range(1, 8):
             new_x = self.x + dx * step
             new_y = self.y + dy * step
@@ -52,7 +52,7 @@ class Piece(ABC):
     # gets valid moves for the piece (to be implemented by subclasses)
     @abstractmethod
     def get_valid_moves(self) -> Generator[tuple[int, int], None, None]:
-        pass
+        raise NotImplementedError
 
     # checks if a given position is occupied by an opponent's piece
     def is_opponent_piece(self, x: int, y: int) -> bool:
@@ -69,13 +69,13 @@ class Piece(ABC):
         return piece is not None and piece.color == self.color
 
     # makes a copy of the piece for use in move generation and board state simulation
-    def copy(self, board: Board):
+    def copy(self, board: Board) -> Piece:
         return self.__class__(self.x, self.y, self.color, board)
 
     # string representation of the piece for debugging
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.color} {self.__class__.__name__} at ({self.x}, {self.y})"
     
     # strng representation of the piece for debugging (calls __str__)
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()

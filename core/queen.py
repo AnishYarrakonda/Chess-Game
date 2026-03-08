@@ -8,7 +8,7 @@ from .board import Board
 class Queen(Piece):
 
     # constructor
-    def __init__(self, x: int, y: int, color: bool, board: Board):
+    def __init__(self, x: int, y: int, color: bool, board: Board) -> None:
         super().__init__(x, y, color, board)
         self.name = 'Queen'
         self.abbreviation = 'Q' if color else 'q'
