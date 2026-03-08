@@ -1,3 +1,4 @@
+#imports
 from __future__ import annotations
 
 import json
@@ -7,6 +8,7 @@ from typing import TypedDict, cast
 from core.board import Board
 
 
+# Defines the SavedGame type.
 class SavedGame(TypedDict):
     timeline: list[str]
     timeline_index: int
@@ -14,20 +16,25 @@ class SavedGame(TypedDict):
     move_notation_history: list[str]
 
 
+# Defines the ChessGame type.
 class ChessGame:
+    # Handles __init__ operations.
     def __init__(self, fen: str = Board.STARTING_FEN) -> None:
         self.board: Board = Board()
         self.board.load_fen(fen)
         self.timeline: list[str] = [self.board.to_fen()]
         self.timeline_index: int = 0
 
+    # Handles current_fen operations.
     def current_fen(self) -> str:
         return self.timeline[self.timeline_index]
 
+    # Handles _truncate_future_if_needed operations.
     def _truncate_future_if_needed(self) -> None:
         if self.timeline_index < len(self.timeline) - 1:
             self.timeline = self.timeline[: self.timeline_index + 1]
 
+    # Handles play operations.
     def play(self, notation: str) -> bool:
         self._truncate_future_if_needed()
         if not self.board.play_notation(notation):
@@ -36,6 +43,7 @@ class ChessGame:
         self.timeline_index += 1
         return True
 
+    # Handles step_backward operations.
     def step_backward(self) -> bool:
         if self.timeline_index == 0:
             return False
@@ -43,6 +51,7 @@ class ChessGame:
         self.board.load_fen(self.timeline[self.timeline_index])
         return True
 
+    # Handles step_forward operations.
     def step_forward(self) -> bool:
         if self.timeline_index >= len(self.timeline) - 1:
             return False
@@ -50,6 +59,7 @@ class ChessGame:
         self.board.load_fen(self.timeline[self.timeline_index])
         return True
 
+    # Handles go_to operations.
     def go_to(self, index: int) -> bool:
         if index < 0 or index >= len(self.timeline):
             return False
@@ -57,6 +67,7 @@ class ChessGame:
         self.board.load_fen(self.timeline[self.timeline_index])
         return True
 
+    # Handles save operations.
     def save(self, path: str | Path) -> None:
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -69,6 +80,7 @@ class ChessGame:
         }
         target.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
+    # Handles load operations.
     @classmethod
     def load(cls, path: str | Path) -> ChessGame:
         source = Path(path)

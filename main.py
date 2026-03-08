@@ -1,6 +1,8 @@
+#imports
 from game.game import ChessGame
 
 
+# Handles main operations.
 def main() -> None:
     _game = ChessGame()
     _ = _game

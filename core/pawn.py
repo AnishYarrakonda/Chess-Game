@@ -1,4 +1,4 @@
-# imports
+#imports
 from typing import Generator
 
 from .piece import Piece

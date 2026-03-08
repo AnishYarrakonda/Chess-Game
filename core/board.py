@@ -1,3 +1,4 @@
+#imports
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ PieceOrNone: TypeAlias = Optional["Piece"]
 PieceSnapshot: TypeAlias = tuple[type["Piece"], int, int, bool, bool, str, str]
 
 
+# Defines the BoardSnapshot type.
 class BoardSnapshot(TypedDict):
     grid: list[list[Optional[PieceSnapshot]]]
     side_to_move: bool
@@ -21,12 +23,14 @@ class BoardSnapshot(TypedDict):
     move_notation_history: list[str]
 
 
+# Defines the MoveHistoryRecord type.
 class MoveHistoryRecord(TypedDict):
     snapshot: BoardSnapshot
     move: Move
     san: str
 
 
+# Defines the TemporaryMoveUndo type.
 class TemporaryMoveUndo(TypedDict):
     piece: "Piece"
     piece_from: tuple[int, int]
@@ -39,7 +43,7 @@ class TemporaryMoveUndo(TypedDict):
     rook_has_moved: Optional[bool]
     promotion_piece: PieceOrNone
 
-
+# Defines the Move type.
 @dataclass(frozen=True)
 class Move:
     from_x: int
@@ -51,6 +55,7 @@ class Move:
     is_en_passant: bool = False
 
 
+# Defines the Board type.
 class Board:
     CASTLE_WHITE_KINGSIDE = 1 << 0
     CASTLE_WHITE_QUEENSIDE = 1 << 1
@@ -59,6 +64,7 @@ class Board:
 
     STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+    # Handles __init__ operations.
     def __init__(self) -> None:
         self.grid: list[list[PieceOrNone]] = [[None for _ in range(8)] for _ in range(8)]
         self.side_to_move: bool = True
@@ -71,12 +77,15 @@ class Board:
         self.move_notation_history: list[str] = []
         self.position_counts: dict[str, int] = {}
 
+    # Handles reset operations.
     def reset(self) -> None:
         self.load_fen(self.STARTING_FEN)
 
+    # Handles in_bounds operations.
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < 8 and 0 <= y < 8
 
+    # Handles get_piece_class operations.
     def get_piece_class(self, char: str) -> type["Piece"]:
         from .bishop import Bishop
         from .king import King
@@ -101,6 +110,7 @@ class Board:
         }
         return abbreviation_to_class[char]
 
+    # Handles _castling_rights_to_fen operations.
     def _castling_rights_to_fen(self) -> str:
         bits_and_chars = [
             (Board.CASTLE_WHITE_KINGSIDE, "K"),
@@ -114,6 +124,7 @@ class Board:
                 fen_rights += char
         return fen_rights or "-"
 
+    # Handles _fen_to_castling_rights operations.
     def _fen_to_castling_rights(self, castling: str) -> int:
         if castling == "-":
             return 0
@@ -131,9 +142,11 @@ class Board:
             rights |= char_to_bit[char]
         return rights
 
+    # Handles _square_to_algebraic operations.
     def _square_to_algebraic(self, x: int, y: int) -> str:
         return f"{chr(ord('a') + y)}{8 - x}"
 
+    # Handles _algebraic_to_square operations.
     def _algebraic_to_square(self, square: str) -> tuple[int, int]:
         if len(square) != 2 or not ("a" <= square[0] <= "h") or not ("1" <= square[1] <= "8"):
             raise ValueError(f"Invalid square: {square}")
@@ -141,11 +154,13 @@ class Board:
         x = 8 - int(square[1])
         return x, y
 
+    # Handles piece_at operations.
     def piece_at(self, x: int, y: int) -> PieceOrNone:
         if not self.in_bounds(x, y):
             return None
         return self.grid[x][y]
 
+    # Handles to_fen operations.
     def to_fen(self) -> str:
         fen_rows: list[str] = []
         for row in self.grid:
@@ -169,6 +184,7 @@ class Board:
         en_passant = "-" if self.en_passant_target is None else self._square_to_algebraic(*self.en_passant_target)
         return f"{piece_placement} {side} {castling} {en_passant} {self.halfmove_clock} {self.fullmove_number}"
 
+    # Handles load_fen operations.
     def load_fen(self, fen: str) -> None:
         parts = fen.strip().split()
         if len(parts) == 1:
@@ -215,14 +231,17 @@ class Board:
         self.position_counts = {}
         self._record_position()
 
+    # Handles _position_key operations.
     def _position_key(self) -> str:
         fen_parts = self.to_fen().split()
         return " ".join(fen_parts[:4])
 
+    # Handles _record_position operations.
     def _record_position(self) -> None:
         key = self._position_key()
         self.position_counts[key] = self.position_counts.get(key, 0) + 1
 
+    # Handles _piece_snapshot operations.
     def _piece_snapshot(self, piece: PieceOrNone) -> Optional[PieceSnapshot]:
         if piece is None:
             return None
@@ -233,9 +252,10 @@ class Board:
             piece.color,
             piece.has_moved,
             piece.abbreviation,
-            getattr(piece, "name", ""),
+            piece.name,
         )
 
+    # Handles _snapshot operations.
     def _snapshot(self) -> BoardSnapshot:
         return {
             "grid": [[self._piece_snapshot(piece) for piece in row] for row in self.grid],
@@ -248,6 +268,7 @@ class Board:
             "move_notation_history": list(self.move_notation_history),
         }
 
+    # Handles _restore operations.
     def _restore(self, snapshot: BoardSnapshot) -> None:
         self.grid = [[None for _ in range(8)] for _ in range(8)]
         for x in range(8):
@@ -271,6 +292,7 @@ class Board:
         self.position_counts = dict(snapshot["position_counts"])
         self.move_notation_history = list(snapshot["move_notation_history"])
 
+    # Handles iter_pieces operations.
     def iter_pieces(self, color: Optional[bool] = None) -> Iterator["Piece"]:
         for row in self.grid:
             for piece in row:
@@ -279,12 +301,14 @@ class Board:
                 if color is None or piece.color == color:
                     yield piece
 
+    # Handles find_king operations.
     def find_king(self, color: bool) -> tuple[int, int]:
         for piece in self.iter_pieces(color):
             if piece.abbreviation.lower() == "k":
                 return piece.x, piece.y
         raise ValueError(f"King not found for color: {color}")
 
+    # Handles _is_clear_line operations.
     def _is_clear_line(self, fx: int, fy: int, tx: int, ty: int) -> bool:
         dx = (tx - fx) and (1 if tx > fx else -1)
         dy = (ty - fy) and (1 if ty > fy else -1)
@@ -296,6 +320,7 @@ class Board:
             y += dy
         return True
 
+    # Handles _piece_attacks_square operations.
     def _piece_attacks_square(self, piece: "Piece", x: int, y: int) -> bool:
         code = piece.abbreviation.lower()
         dx = x - piece.x
@@ -324,16 +349,19 @@ class Board:
 
         return False
 
+    # Handles is_square_attacked operations.
     def is_square_attacked(self, x: int, y: int, by_color: bool) -> bool:
         for piece in self.iter_pieces(by_color):
             if self._piece_attacks_square(piece, x, y):
                 return True
         return False
 
+    # Handles in_check operations.
     def in_check(self, color: bool) -> bool:
         king_x, king_y = self.find_king(color)
         return self.is_square_attacked(king_x, king_y, not color)
 
+    # Handles _pseudo_moves_for_piece operations.
     def _pseudo_moves_for_piece(self, piece: "Piece") -> list[Move]:
         moves: list[Move] = []
         code = piece.abbreviation.lower()
@@ -382,11 +410,15 @@ class Board:
                     moves.append(Move(piece.x, piece.y, nx, ny))
 
         elif code in ("b", "r", "q"):
-            directions = []
+            directions: list[tuple[int, int]] = []
+            diagonal_directions: tuple[tuple[int, int], ...] = ((1, 1), (1, -1), (-1, 1), (-1, -1))
+            orthogonal_directions: tuple[tuple[int, int], ...] = ((1, 0), (-1, 0), (0, 1), (0, -1))
             if code in ("b", "q"):
-                directions.extend(((1, 1), (1, -1), (-1, 1), (-1, -1)))
+                for direction in diagonal_directions:
+                    directions.append(direction)
             if code in ("r", "q"):
-                directions.extend(((1, 0), (-1, 0), (0, 1), (0, -1)))
+                for direction in orthogonal_directions:
+                    directions.append(direction)
 
             for dx, dy in directions:
                 for step in range(1, 8):
@@ -427,6 +459,7 @@ class Board:
 
         return moves
 
+    # Handles _can_castle operations.
     def _can_castle(self, color: bool, kingside: bool) -> bool:
         king_row = 7 if color else 0
         king_col = 4
@@ -457,6 +490,7 @@ class Board:
 
         return True
 
+    # Handles _apply_move_no_record operations.
     def _apply_move_no_record(self, move: Move) -> tuple[PieceOrNone, tuple[int, int]]:
         piece = self.grid[move.from_x][move.from_y]
         if piece is None:
@@ -500,6 +534,7 @@ class Board:
 
         return captured_piece, captured_coords
 
+    # Handles _update_castling_rights_after_move operations.
     def _update_castling_rights_after_move(
         self, move: Move, moved_piece: "Piece", captured_piece: PieceOrNone, captured_coords: tuple[int, int]
     ) -> None:
@@ -529,6 +564,7 @@ class Board:
             if (not captured_piece.color) and captured_coords == (0, 7):
                 self.castling_rights &= ~self.CASTLE_BLACK_KINGSIDE
 
+    # Handles _move_leaves_king_in_check operations.
     def _move_leaves_king_in_check(self, move: Move, color: bool) -> bool:
         undo = self._apply_temporary_move(move)
         try:
@@ -536,6 +572,7 @@ class Board:
         finally:
             self._undo_temporary_move(undo)
 
+    # Handles _apply_temporary_move operations.
     def _apply_temporary_move(self, move: Move) -> TemporaryMoveUndo:
         piece = self.grid[move.from_x][move.from_y]
         if piece is None:
@@ -597,6 +634,7 @@ class Board:
 
         return undo
 
+    # Handles _undo_temporary_move operations.
     def _undo_temporary_move(self, undo: TemporaryMoveUndo) -> None:
         piece = undo["piece"]
         from_x, from_y = undo["piece_from"]
@@ -615,13 +653,19 @@ class Board:
 
         rook = undo["rook"]
         if rook is not None:
-            rook_from_x, rook_from_y = undo["rook_from"]
-            rook_to_x, rook_to_y = undo["rook_to"]
+            rook_from = undo["rook_from"]
+            rook_to = undo["rook_to"]
+            rook_has_moved = undo["rook_has_moved"]
+            if rook_from is None or rook_to is None or rook_has_moved is None:
+                raise ValueError("Incomplete rook undo state for castling.")
+            rook_from_x, rook_from_y = rook_from
+            rook_to_x, rook_to_y = rook_to
             self.grid[rook_to_x][rook_to_y] = None
             self.grid[rook_from_x][rook_from_y] = rook
             rook.x, rook.y = rook_from_x, rook_from_y
-            rook.has_moved = undo["rook_has_moved"]
+            rook.has_moved = rook_has_moved
 
+    # Handles get_legal_move_objects operations.
     def get_legal_move_objects(self, piece: PieceOrNone) -> list[Move]:
         if piece is None:
             return []
@@ -631,9 +675,11 @@ class Board:
                 moves.append(move)
         return moves
 
+    # Handles get_legal_moves operations.
     def get_legal_moves(self, piece: PieceOrNone) -> list[tuple[int, int]]:
         return [(m.to_x, m.to_y) for m in self.get_legal_move_objects(piece)]
 
+    # Handles get_all_legal_moves operations.
     def get_all_legal_moves(self, color: Optional[bool] = None) -> list[Move]:
         if color is None:
             color = self.side_to_move
@@ -642,6 +688,7 @@ class Board:
             result.extend(self.get_legal_move_objects(piece))
         return result
 
+    # Handles _matching_legal_move operations.
     def _matching_legal_move(self, from_x: int, from_y: int, to_x: int, to_y: int, promotion: Optional[str]) -> Optional[Move]:
         piece = self.grid[from_x][from_y]
         if piece is None or piece.color != self.side_to_move:
@@ -658,6 +705,7 @@ class Board:
                     return move
         return None
 
+    # Handles move_by_coords operations.
     def move_by_coords(self, from_x: int, from_y: int, to_x: int, to_y: int, promotion: Optional[str] = None) -> bool:
         if not (self.in_bounds(from_x, from_y) and self.in_bounds(to_x, to_y)):
             return False
@@ -667,6 +715,7 @@ class Board:
         self._execute_legal_move(move)
         return True
 
+    # Handles move_by_uci operations.
     def move_by_uci(self, notation: str) -> bool:
         text = notation.strip()
         if len(text) not in (4, 5):
@@ -679,11 +728,13 @@ class Board:
         promotion = text[4].upper() if len(text) == 5 else None
         return self.move_by_coords(from_x, from_y, to_x, to_y, promotion)
 
+    # Handles _move_is_capture operations.
     def _move_is_capture(self, move: Move) -> bool:
         if move.is_en_passant:
             return True
         return self.grid[move.to_x][move.to_y] is not None
 
+    # Handles _move_to_san operations.
     def _move_to_san(self, move: Move) -> str:
         piece = self.grid[move.from_x][move.from_y]
         if piece is None:
@@ -698,7 +749,7 @@ class Board:
 
             disambiguation = ""
             if code:
-                candidates = []
+                candidates: list["Piece"] = []
                 for p in self.iter_pieces(piece.color):
                     if p is piece or p.abbreviation.upper() != piece.abbreviation.upper():
                         continue
@@ -708,8 +759,13 @@ class Board:
                             break
 
                 if candidates:
-                    same_file = any(c.y == piece.y for c in candidates)
-                    same_rank = any(c.x == piece.x for c in candidates)
+                    same_file = False
+                    same_rank = False
+                    for candidate in candidates:
+                        if candidate.y == piece.y:
+                            same_file = True
+                        if candidate.x == piece.x:
+                            same_rank = True
                     if not same_file:
                         disambiguation = chr(ord("a") + piece.y)
                     elif not same_rank:
@@ -737,6 +793,7 @@ class Board:
             san += "+"
         return san
 
+    # Handles _execute_legal_move operations.
     def _execute_legal_move(self, move: Move) -> None:
         snapshot = self._snapshot()
         moved_piece = self.grid[move.from_x][move.from_y]
@@ -766,6 +823,7 @@ class Board:
         self.move_notation_history.append(san)
         self._record_position()
 
+    # Handles undo_move operations.
     def undo_move(self) -> bool:
         if not self.move_history:
             return False
@@ -773,6 +831,7 @@ class Board:
         self._restore(record["snapshot"])
         return True
 
+    # Handles parse_san operations.
     def parse_san(self, notation: str) -> Optional[Move]:
         text = notation.strip()
         if not text:
@@ -851,6 +910,7 @@ class Board:
             return candidates[0]
         return None
 
+    # Handles play_notation operations.
     def play_notation(self, notation: str) -> bool:
         text = notation.strip()
         if not text:
@@ -865,22 +925,27 @@ class Board:
         self._execute_legal_move(move)
         return True
 
+    # Handles is_checkmate operations.
     def is_checkmate(self, color: Optional[bool] = None) -> bool:
         if color is None:
             color = self.side_to_move
         return self.in_check(color) and not self.get_all_legal_moves(color)
 
+    # Handles is_stalemate operations.
     def is_stalemate(self, color: Optional[bool] = None) -> bool:
         if color is None:
             color = self.side_to_move
         return (not self.in_check(color)) and not self.get_all_legal_moves(color)
 
+    # Handles is_draw_by_fifty_move_rule operations.
     def is_draw_by_fifty_move_rule(self) -> bool:
         return self.halfmove_clock >= 100
 
+    # Handles is_draw_by_threefold_repetition operations.
     def is_draw_by_threefold_repetition(self) -> bool:
         return any(count >= 3 for count in self.position_counts.values())
 
+    # Handles is_draw_by_insufficient_material operations.
     def is_draw_by_insufficient_material(self) -> bool:
         pieces = list(self.iter_pieces())
         non_kings = [p for p in pieces if p.abbreviation.lower() != "k"]
@@ -902,6 +967,7 @@ class Board:
 
         return False
 
+    # Handles is_draw operations.
     def is_draw(self) -> bool:
         return (
             self.is_stalemate()

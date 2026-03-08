@@ -1,3 +1,4 @@
+#imports
 import tempfile
 import unittest
 from pathlib import Path
@@ -5,7 +6,9 @@ from pathlib import Path
 from game.game import ChessGame
 
 
+# Defines the TestGameSaveLoadAnalysis type.
 class TestGameSaveLoadAnalysis(unittest.TestCase):
+    # Handles test_save_load_and_navigation operations.
     def test_save_load_and_navigation(self) -> None:
         game = ChessGame()
         for move in ["e2e4", "e7e5", "g1f3", "b8c6"]:
@@ -23,6 +26,7 @@ class TestGameSaveLoadAnalysis(unittest.TestCase):
             self.assertTrue(loaded.step_forward())
             self.assertFalse(loaded.step_forward())
 
+    # Handles test_continue_from_loaded_game operations.
     def test_continue_from_loaded_game(self) -> None:
         game = ChessGame()
         for move in ["e2e4", "e7e5", "g1f3", "b8c6"]:
@@ -35,6 +39,7 @@ class TestGameSaveLoadAnalysis(unittest.TestCase):
             self.assertTrue(loaded.play("f1b5"))
             self.assertEqual(loaded.timeline_index, len(loaded.timeline) - 1)
 
+    # Handles test_branch_after_stepping_back_truncates_future operations.
     def test_branch_after_stepping_back_truncates_future(self) -> None:
         game = ChessGame()
         for move in ["e2e4", "e7e5", "g1f3", "b8c6"]:

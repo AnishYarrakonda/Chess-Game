@@ -1,4 +1,4 @@
-# imports
+#imports
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generator
@@ -16,6 +16,7 @@ class Piece(ABC):
         self.y: int = y
         self.board: Board = board
         self.has_moved: bool = False
+        self.name: str = self.__class__.__name__
         self.abbreviation: str = ""
 
     # moves the piece to a new position and updates the board state
