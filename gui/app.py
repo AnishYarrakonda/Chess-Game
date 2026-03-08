@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
-from typing import Any, Callable, Optional, TypedDict, cast
+from typing import Optional, TypedDict
 
 from game.game import ChessGame, TimelineMove
 
@@ -76,7 +76,7 @@ class ChessGUI(tk.Tk):
         }
 
         self.image_dir: Path = Path("assets/pieces")
-        self.image_cache: dict[tuple[str, int], Any] = {}
+        self.image_cache: dict[tuple[str, int], tk.PhotoImage] = {}
 
         self._build_layout()
         self._bind_events()
@@ -86,9 +86,8 @@ class ChessGUI(tk.Tk):
     def _build_layout(self) -> None:
         outer = ttk.Frame(self)
         outer.pack(fill=tk.BOTH, expand=True, padx=16, pady=16)
-        outer.columnconfigure(0, weight=6)
+        outer.columnconfigure(0, weight=3)
         outer.columnconfigure(1, weight=2)
-        outer.columnconfigure(2, weight=1)
         outer.rowconfigure(0, weight=1)
 
         board_card = ttk.Frame(outer, padding=10)
@@ -99,50 +98,33 @@ class ChessGUI(tk.Tk):
         self.canvas = tk.Canvas(board_card, highlightthickness=0, bg="#1f252b")
         self.canvas.grid(row=0, column=0, sticky="nsew")
 
-        notation_panel = ttk.Frame(outer, padding=10)
-        notation_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 12))
-        notation_panel.columnconfigure(0, weight=1)
-        notation_panel.rowconfigure(1, weight=1)
+        panel = ttk.Frame(outer, padding=10)
+        panel.grid(row=0, column=1, sticky="nsew")
+        panel.columnconfigure(0, weight=1)
+        panel.rowconfigure(3, weight=1)
 
-        title = ttk.Label(notation_panel, text="Notation", font=("Georgia", 18, "bold"))
-        title.grid(row=0, column=0, sticky="w", pady=(0, 8))
+        title = ttk.Label(panel, text="Chess", font=("Georgia", 22, "bold"))
+        title.grid(row=0, column=0, sticky="w", pady=(0, 12))
 
-        move_box = ttk.LabelFrame(notation_panel, text="Moves")
-        move_box.grid(row=1, column=0, sticky="nsew")
-        move_box.rowconfigure(0, weight=1)
-        move_box.columnconfigure(0, weight=1)
+        controls = ttk.Frame(panel)
+        controls.grid(row=1, column=0, sticky="ew")
+        controls.columnconfigure(0, weight=1)
+        controls.columnconfigure(1, weight=1)
 
-        self.moves_list: tk.Listbox = tk.Listbox(move_box, activestyle="none", font=("Menlo", 12), bg="#f7f8fa", bd=0)
-        self.moves_list.grid(row=0, column=0, sticky="nsew")
+        ttk.Button(controls, text="New Game", command=self._new_game).grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=3)
+        ttk.Button(controls, text="Flip Board", command=self._flip_board).grid(row=0, column=1, sticky="ew", padx=(6, 0), pady=3)
 
-        self.moves_scrollbar: ttk.Scrollbar = ttk.Scrollbar(move_box, orient=tk.VERTICAL, command=self._on_scrollbar)
-        self.moves_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.moves_list.configure(yscrollcommand=self._on_list_scroll)
+        ttk.Button(controls, text="Undo", command=self._undo_move).grid(row=1, column=0, sticky="ew", padx=(0, 6), pady=3)
+        ttk.Button(controls, text="Save Game", command=self._save_game).grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=3)
 
-        self.mode_label = ttk.Label(notation_panel, text="Mode: Play", font=("Arial", 10, "bold"))
-        self.mode_label.grid(row=2, column=0, sticky="w", pady=(8, 2))
+        ttk.Button(controls, text="Load Game (Replay)", command=self._load_game_replay).grid(row=2, column=0, sticky="ew", padx=(0, 6), pady=3)
+        ttk.Button(controls, text="Load Position", command=self._load_position).grid(row=2, column=1, sticky="ew", padx=(6, 0), pady=3)
 
-        material_box = ttk.LabelFrame(notation_panel, text="Material")
-        material_box.grid(row=3, column=0, sticky="ew", pady=(2, 6))
-        material_box.columnconfigure(0, weight=1)
+        ttk.Button(controls, text="Prev", command=self._step_backward).grid(row=3, column=0, sticky="ew", padx=(0, 6), pady=3)
+        ttk.Button(controls, text="Next", command=self._step_forward).grid(row=3, column=1, sticky="ew", padx=(6, 0), pady=3)
 
-        self.material_var = tk.StringVar(value="Even material")
-        self.captured_white_var = tk.StringVar(value="White captured: -")
-        self.captured_black_var = tk.StringVar(value="Black captured: -")
-        ttk.Label(material_box, textvariable=self.material_var).grid(row=0, column=0, sticky="w", padx=6, pady=(4, 2))
-        ttk.Label(material_box, textvariable=self.captured_white_var).grid(row=1, column=0, sticky="w", padx=6, pady=2)
-        ttk.Label(material_box, textvariable=self.captured_black_var).grid(row=2, column=0, sticky="w", padx=6, pady=(2, 4))
-
-        self.status_var = tk.StringVar(value="Ready")
-        status = ttk.Label(notation_panel, textvariable=self.status_var, foreground="#1f4f8b")
-        status.grid(row=4, column=0, sticky="ew", pady=(2, 0))
-
-        controls_panel = ttk.Frame(outer, padding=10)
-        controls_panel.grid(row=0, column=2, sticky="ns")
-        controls_panel.columnconfigure(0, weight=1)
-
-        speed_frame = ttk.LabelFrame(controls_panel, text="Animation")
-        speed_frame.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        speed_frame = ttk.LabelFrame(panel, text="Animation")
+        speed_frame.grid(row=2, column=0, sticky="ew", pady=(10, 10))
         speed_frame.columnconfigure(0, weight=1)
 
         self.speed_var = tk.IntVar(value=self.animation_duration_ms)
@@ -155,38 +137,24 @@ class ChessGUI(tk.Tk):
         )
         speed.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
 
-        buttons: list[tuple[str, Callable[[], None]]] = [
-            ("New Game", self._new_game),
-            ("Flip Board", self._flip_board),
-            ("Undo", self._undo_move),
-            ("Save Game", self._save_game),
-            ("Load Replay", self._load_game_replay),
-            ("Load Position", self._load_position),
-            ("Piece Folder", self._choose_piece_folder),
-            ("Prev", self._step_backward),
-            ("Next", self._step_forward),
-        ]
-        for idx, (label, callback) in enumerate(buttons, start=1):
-            btn = ttk.Button(controls_panel, text=label, command=callback, width=14)
-            btn.grid(row=idx, column=0, sticky="ew", pady=3)
+        self.mode_label = ttk.Label(panel, text="Mode: Play", font=("Arial", 10, "bold"))
+        self.mode_label.grid(row=3, column=0, sticky="w", pady=(2, 6))
 
-    # Handles _on_scrollbar operations.
-    def _on_scrollbar(self, *args: str) -> None:
-        cast(Any, self.moves_list.yview)(*args)
+        move_box = ttk.LabelFrame(panel, text="Moves")
+        move_box.grid(row=4, column=0, sticky="nsew")
+        move_box.rowconfigure(0, weight=1)
+        move_box.columnconfigure(0, weight=1)
 
-    # Handles _on_list_scroll operations.
-    def _on_list_scroll(self, first: str, last: str) -> None:
-        self.moves_scrollbar.set(first, last)
+        self.moves_list: tk.Listbox = tk.Listbox(move_box, activestyle="none", font=("Menlo", 12), bg="#f7f8fa", bd=0)
+        self.moves_list.grid(row=0, column=0, sticky="nsew")
 
-    # Handles _choose_piece_folder operations.
-    def _choose_piece_folder(self) -> None:
-        selected = filedialog.askdirectory(title="Choose Piece Image Folder", initialdir=str(self.image_dir))
-        if not selected:
-            return
-        self.image_dir = Path(selected)
-        self.image_cache.clear()
-        self.status_var.set(f"Piece folder: {self.image_dir.name}")
-        self._draw_board()
+        scrollbar = ttk.Scrollbar(move_box, orient=tk.VERTICAL, command=self.moves_list.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.moves_list.configure(yscrollcommand=scrollbar.set)
+
+        self.status_var = tk.StringVar(value="Ready")
+        status = ttk.Label(panel, textvariable=self.status_var, foreground="#1f4f8b")
+        status.grid(row=5, column=0, sticky="ew", pady=(8, 0))
 
     # Handles _bind_events operations.
     def _bind_events(self) -> None:
@@ -290,15 +258,10 @@ class ChessGUI(tk.Tk):
             raw_obj: object = json.loads(text)
             if not isinstance(raw_obj, dict):
                 raise ValueError("JSON position must be an object")
-            raw: dict[str, object] = cast(dict[str, object], raw_obj)
-
-            current_fen_obj: object = raw.get("current_fen")
-            if isinstance(current_fen_obj, str):
-                return current_fen_obj
-
-            timeline_obj: object = raw.get("timeline")
-            if isinstance(timeline_obj, list) and timeline_obj:
-                timeline: list[object] = cast(list[object], timeline_obj)
+            if isinstance(raw_obj.get("current_fen"), str):
+                return str(raw_obj["current_fen"])
+            if isinstance(raw_obj.get("timeline"), list) and raw_obj["timeline"]:
+                timeline = raw_obj["timeline"]
                 first = timeline[0]
                 if not isinstance(first, str):
                     raise ValueError("timeline entries must be FEN strings")
@@ -322,36 +285,7 @@ class ChessGUI(tk.Tk):
     def _refresh_all(self) -> None:
         self.mode_label.configure(text="Mode: Replay" if self.read_only_loaded_game else "Mode: Play")
         self._sync_move_list()
-        self._update_material_panel()
         self._draw_board()
-
-    # Handles _format_captured_line operations.
-    def _format_captured_line(self, counts: dict[str, int]) -> str:
-        order = ("q", "r", "b", "n", "p")
-        tokens: list[str] = []
-        for code in order:
-            count = counts.get(code, 0)
-            if count <= 0:
-                continue
-            token = code.upper() if code != "p" else "P"
-            if count > 1:
-                token = f"{token}x{count}"
-            tokens.append(token)
-        return " ".join(tokens) if tokens else "-"
-
-    # Handles _update_material_panel operations.
-    def _update_material_panel(self) -> None:
-        balance = self.game.board.material_balance()
-        if balance > 0:
-            self.material_var.set(f"White +{balance}")
-        elif balance < 0:
-            self.material_var.set(f"Black +{abs(balance)}")
-        else:
-            self.material_var.set("Even material")
-
-        captured_by_white, captured_by_black = self.game.board.captured_piece_counts()
-        self.captured_white_var.set(f"White captured: {self._format_captured_line(captured_by_white)}")
-        self.captured_black_var.set(f"Black captured: {self._format_captured_line(captured_by_black)}")
 
     # Handles _sync_move_list operations.
     def _sync_move_list(self) -> None:
@@ -462,19 +396,18 @@ class ChessGUI(tk.Tk):
     def _draw_coordinates(self) -> None:
         left = (self.canvas.winfo_width() - self.board_px) // 2 + self.margin
         top = (self.canvas.winfo_height() - self.board_px) // 2 + self.margin
-        coord_size = max(12, int(self.square_px * 0.22))
 
         for col in range(8):
             file_char = chr(ord("a") + (7 - col if self.flipped else col))
             x = left + col * self.square_px + 4
             y = top + 8 * self.square_px - 4
-            self.canvas.create_text(x, y, text=file_char, anchor="sw", fill="#12320c", font=("Arial", coord_size, "bold"))
+            self.canvas.create_text(x, y, text=file_char, anchor="sw", fill="#12320c", font=("Arial", 10, "bold"))
 
         for row in range(8):
             rank_char = str(row + 1 if self.flipped else 8 - row)
             x = left + 4
             y = top + row * self.square_px + 12
-            self.canvas.create_text(x, y, text=rank_char, anchor="nw", fill="#12320c", font=("Arial", coord_size, "bold"))
+            self.canvas.create_text(x, y, text=rank_char, anchor="nw", fill="#12320c", font=("Arial", 10, "bold"))
 
     # Handles _draw_legal_targets operations.
     def _draw_legal_targets(self) -> None:
@@ -494,7 +427,7 @@ class ChessGUI(tk.Tk):
                 )
 
     # Handles _piece_image operations.
-    def _piece_image(self, abbrev: str) -> Optional[Any]:
+    def _piece_image(self, abbrev: str) -> Optional[tk.PhotoImage]:
         if Image is None or ImageTk is None:
             return None
 
@@ -514,7 +447,7 @@ class ChessGUI(tk.Tk):
             return None
 
         image = Image.open(source).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
-        tk_image: Any = ImageTk.PhotoImage(image)
+        tk_image = ImageTk.PhotoImage(image)
         self.image_cache[key] = tk_image
         return tk_image
 
@@ -535,13 +468,13 @@ class ChessGUI(tk.Tk):
                 cx, cy = self._square_center(x, y)
                 image = self._piece_image(piece.abbreviation)
                 if image is not None:
-                    cast(Any, self.canvas).create_image(cx, cy, image=image)
+                    self.canvas.create_image(cx, cy, image=image)
                 else:
                     self.canvas.create_text(
                         cx,
                         cy,
                         text=self.symbols[piece.abbreviation],
-                        font=("DejaVu Sans", int(self.square_px * 0.68), "bold"),
+                        font=("Segoe UI Symbol", int(self.square_px * 0.64)),
                         fill="#101316" if piece.color else "#0a0a0a",
                     )
 
@@ -602,15 +535,6 @@ class ChessGUI(tk.Tk):
             self.status_var.set("Replay mode: moves disabled")
             return
 
-        if self.selected_square is not None:
-            from_sq = self.selected_square
-            if square in self.legal_targets:
-                self._play_move(from_sq, square)
-                return
-            if square in self.pseudo_targets:
-                self._flash_king()
-                return
-
         x, y = square
         piece = self.game.board.grid[x][y]
         if piece is None:
@@ -625,7 +549,7 @@ class ChessGUI(tk.Tk):
 
         self.selected_square = (x, y)
         self.legal_targets = {(m.to_x, m.to_y) for m in self.game.board.get_legal_move_objects(piece)}
-        self.pseudo_targets = {(m.to_x, m.to_y) for m in self.game.board.pseudo_moves_for_piece(piece)}
+        self.pseudo_targets = {(m.to_x, m.to_y) for m in self.game.board._pseudo_moves_for_piece(piece)}
 
         self.drag_state = {
             "from_x": x,
