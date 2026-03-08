@@ -5,7 +5,15 @@ import json
 from pathlib import Path
 from typing import TypedDict, cast
 
-from core.board import Board
+try:
+    from core.board import Board
+except ModuleNotFoundError:
+    import sys
+
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from core.board import Board
 
 
 # Defines the SavedGame type.
@@ -84,26 +92,27 @@ class ChessGame:
     @classmethod
     def load(cls, path: str | Path) -> ChessGame:
         source = Path(path)
-        raw = json.loads(source.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
+        raw_obj: object = json.loads(source.read_text(encoding="utf-8"))
+        if not isinstance(raw_obj, dict):
             raise ValueError("Saved game file must contain a JSON object.")
+        raw: dict[str, object] = cast(dict[str, object], raw_obj)
 
-        timeline_obj = raw.get("timeline")
+        timeline_obj: object = raw.get("timeline")
         if not isinstance(timeline_obj, list) or not timeline_obj:
             raise ValueError("Saved game is missing a valid timeline.")
-        timeline = [str(item) for item in timeline_obj]
+        timeline = [str(item) for item in cast(list[object], timeline_obj)]
 
-        index_obj = raw.get("timeline_index", 0)
+        index_obj: object = raw.get("timeline_index", 0)
         if not isinstance(index_obj, int) or index_obj < 0 or index_obj >= len(timeline):
             raise ValueError("Saved game has an invalid timeline index.")
-        index = cast(int, index_obj)
+        index: int = index_obj
 
         game = cls(timeline[0])
         game.timeline = timeline
         game.timeline_index = index
         game.board.load_fen(game.timeline[index])
 
-        notations = raw.get("move_notation_history", [])
+        notations: object = raw.get("move_notation_history", [])
         if isinstance(notations, list):
-            game.board.move_notation_history = [str(x) for x in notations]
+            game.board.move_notation_history = [str(x) for x in cast(list[object], notations)]
         return game
