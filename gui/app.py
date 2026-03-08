@@ -2,25 +2,12 @@
 from __future__ import annotations
 
 import json
-import io
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Optional, TypedDict, cast
 
 from game.game import ChessGame, TimelineMove
-
-try:
-    from PIL import Image, ImageTk
-except ModuleNotFoundError:
-    Image = None
-    ImageTk = None
-
-try:
-    import cairosvg  # type: ignore
-except Exception:
-    # cairosvg can fail with OSError when native cairo is missing.
-    cairosvg = None
 
 
 # Defines the DragState type.
@@ -60,6 +47,7 @@ class ChessGUI(tk.Tk):
 
         self.last_move: Optional[TimelineMove] = None
         self.flash_king_square: Optional[tuple[int, int]] = None
+        self.checkmate_king_square: Optional[tuple[int, int]] = None
         self.flash_after_id: Optional[str] = None
 
         self.speed_map: dict[str, int] = {
@@ -79,7 +67,6 @@ class ChessGUI(tk.Tk):
 
         self.notation_index_to_timeline: list[int] = []
         self.suppress_notation_select: bool = False
-        self.warned_svg_support: bool = False
 
         self.symbols: dict[str, str] = {
             "K": "♔",
@@ -95,9 +82,6 @@ class ChessGUI(tk.Tk):
             "n": "♞",
             "p": "♟",
         }
-
-        self.image_dir: Path = Path(__file__).resolve().parents[1] / "piece_images"
-        self.image_cache: dict[tuple[str, int], Any] = {}
 
         self._build_layout()
         self._bind_events()
@@ -202,7 +186,6 @@ class ChessGUI(tk.Tk):
             ("Save Game", self._save_game),
             ("Load Replay", self._load_game_replay),
             ("Load Position", self._load_position),
-            ("Piece Folder", self._choose_piece_folder),
             ("Prev", self._step_backward),
             ("Next", self._step_forward),
         ]
@@ -248,16 +231,6 @@ class ChessGUI(tk.Tk):
     def _on_speed_mode_change(self, _event: tk.Event[tk.Misc]) -> None:
         mode = self.animation_mode_var.get()
         self.animation_duration_ms = self.speed_map.get(mode, 200)
-
-    # Handles _choose_piece_folder operations.
-    def _choose_piece_folder(self) -> None:
-        selected = filedialog.askdirectory(title="Choose Piece Image Folder", initialdir=str(self.image_dir))
-        if not selected:
-            return
-        self.image_dir = Path(selected)
-        self.image_cache.clear()
-        self.status_var.set(f"Piece folder: {self.image_dir.name}")
-        self._draw_board()
 
     # Handles _new_game operations.
     def _new_game(self) -> None:
@@ -398,9 +371,36 @@ class ChessGUI(tk.Tk):
     # Handles _refresh_all operations.
     def _refresh_all(self) -> None:
         self.mode_label.configure(text="Mode: Replay" if self.read_only_loaded_game else "Mode: Play")
+        self._update_end_state()
         self._sync_move_list()
         self._update_material_panel()
         self._draw_board()
+
+    # Handles _update_end_state operations.
+    def _update_end_state(self) -> None:
+        self.checkmate_king_square = None
+        side_to_move = self.game.board.side_to_move
+
+        if self.game.board.is_checkmate(side_to_move):
+            self.checkmate_king_square = self.game.board.find_king(side_to_move)
+            winner = "Black" if side_to_move else "White"
+            self.status_var.set(f"Checkmate: {winner} wins")
+            return
+
+        if self.game.board.is_stalemate(side_to_move):
+            self.status_var.set("Draw: stalemate")
+            return
+
+        if self.game.board.is_draw_by_fifty_move_rule():
+            self.status_var.set("Draw: fifty-move rule")
+            return
+
+        if self.game.board.is_draw_by_threefold_repetition():
+            self.status_var.set("Draw: threefold repetition")
+            return
+
+        if self.game.board.is_draw_by_insufficient_material():
+            self.status_var.set("Draw: insufficient material")
 
     # Handles _sync_move_list operations.
     def _sync_move_list(self) -> None:
@@ -530,7 +530,9 @@ class ChessGUI(tk.Tk):
                         fill = last_a if (row + col) % 2 == 0 else last_b
                 if self.selected_square == (bx, by):
                     fill = select_color
-                if self.flash_king_square == (bx, by):
+                if self.checkmate_king_square == (bx, by):
+                    fill = "#d63f3f"
+                elif self.flash_king_square == (bx, by):
                     fill = "#ff6b6b"
 
                 self.canvas.create_rectangle(x0, y0, x1, y1, fill=fill, width=0)
@@ -571,50 +573,6 @@ class ChessGUI(tk.Tk):
                 ring = self.square_px * 0.42
                 self.canvas.create_oval(cx - ring, cy - ring, cx + ring, cy + ring, outline="#8fb16b", width=3)
 
-    # Handles _piece_image operations.
-    def _piece_image(self, abbrev: str) -> Optional[Any]:
-        if Image is None or ImageTk is None:
-            return None
-
-        size = int(self.square_px * 0.88)
-        key = (abbrev, size)
-        if key in self.image_cache:
-            return self.image_cache[key]
-
-        color_prefix = "w" if abbrev.isupper() else "b"
-        piece_letter = abbrev.upper()
-        candidates = [
-            self.image_dir / f"{color_prefix}{piece_letter}.png",
-            self.image_dir / f"{color_prefix}{piece_letter}.svg",
-            self.image_dir / f"{abbrev}.png",
-            self.image_dir / f"{abbrev.lower()}.png",
-            self.image_dir / f"{color_prefix}_{piece_letter}.png",
-            self.image_dir / f"{color_prefix}_{piece_letter}.svg",
-        ]
-        source = next((path for path in candidates if path.exists()), None)
-        if source is None:
-            return None
-
-        if source.suffix.lower() == ".svg":
-            if cairosvg is None:
-                if not self.warned_svg_support:
-                    self.status_var.set("SVG pieces unavailable: install Cairo/cairosvg or use PNG images.")
-                    self.warned_svg_support = True
-                return None
-            try:
-                png_data = cairosvg.svg2png(url=str(source), output_width=size, output_height=size)  # type: ignore
-            except Exception:
-                if not self.warned_svg_support:
-                    self.status_var.set("SVG conversion failed: install native Cairo or use PNG images.")
-                    self.warned_svg_support = True
-                return None
-            image = Image.open(io.BytesIO(png_data)).convert("RGBA")  # type: ignore
-        else:
-            image = Image.open(source).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
-        tk_image: Any = ImageTk.PhotoImage(image)
-        self.image_cache[key] = tk_image
-        return tk_image
-
     # Handles _draw_pieces operations.
     def _draw_pieces(self) -> None:
         hidden_to: Optional[tuple[int, int]] = self.anim_to if self.animating else None
@@ -628,17 +586,13 @@ class ChessGUI(tk.Tk):
                     continue
 
                 cx, cy = self._square_center(x, y)
-                image = self._piece_image(piece.abbreviation)
-                if image is not None:
-                    cast(Any, self.canvas).create_image(cx, cy, image=image)
-                else:
-                    self.canvas.create_text(
-                        cx,
-                        cy,
-                        text=self.symbols[piece.abbreviation],
-                        font=("DejaVu Sans", int(self.square_px * 0.7), "bold"),
-                        fill="#101316" if piece.color else "#0a0a0a",
-                    )
+                self.canvas.create_text(
+                    cx,
+                    cy,
+                    text=self.symbols[piece.abbreviation],
+                    font=("DejaVu Sans", int(self.square_px * 0.7), "bold"),
+                    fill="#101316" if piece.color else "#0a0a0a",
+                )
 
     # Handles _draw_drag_piece operations.
     def _draw_drag_piece(self) -> None:
