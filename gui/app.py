@@ -17,8 +17,9 @@ except ModuleNotFoundError:
     ImageTk = None
 
 try:
-    import cairosvg # type: ignore
-except ModuleNotFoundError:
+    import cairosvg  # type: ignore
+except Exception:
+    # cairosvg can fail with OSError when native cairo is missing.
     cairosvg = None
 
 
@@ -597,11 +598,17 @@ class ChessGUI(tk.Tk):
         if source.suffix.lower() == ".svg":
             if cairosvg is None:
                 if not self.warned_svg_support:
-                    self.status_var.set("Install cairosvg or use PNG piece images in piece_images/")
+                    self.status_var.set("SVG pieces unavailable: install Cairo/cairosvg or use PNG images.")
                     self.warned_svg_support = True
                 return None
-            png_data = cairosvg.svg2png(url=str(source), output_width=size, output_height=size) # type: ignore
-            image = Image.open(io.BytesIO(png_data)).convert("RGBA") # type: ignore
+            try:
+                png_data = cairosvg.svg2png(url=str(source), output_width=size, output_height=size)  # type: ignore
+            except Exception:
+                if not self.warned_svg_support:
+                    self.status_var.set("SVG conversion failed: install native Cairo or use PNG images.")
+                    self.warned_svg_support = True
+                return None
+            image = Image.open(io.BytesIO(png_data)).convert("RGBA")  # type: ignore
         else:
             image = Image.open(source).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
         tk_image: Any = ImageTk.PhotoImage(image)
