@@ -13,7 +13,7 @@ def test_fen():
 
     board.load_fen('8/8/8/8/8/8/8/8 b KQkq e3 4 17')
     assert board.side_to_move is False
-    assert board.castling_rights == 'KQkq'
+    assert board.castling_rights == 15
     assert board.en_passant_target == (5, 4)
     assert board.halfmove_clock == 4
     assert board.fullmove_number == 17

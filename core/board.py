@@ -5,20 +5,28 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from .piece import Piece
 
+# stores the board for the game
 class Board:
+    CASTLE_WHITE_KINGSIDE = 1 << 0
+    CASTLE_WHITE_QUEENSIDE = 1 << 1
+    CASTLE_BLACK_KINGSIDE = 1 << 2
+    CASTLE_BLACK_QUEENSIDE = 1 << 3
 
+    # creates a new board
     def __init__(self) -> None:
         self.grid: list[list[Optional[Piece]]] = [[None for _ in range(8)] for _ in range(8)]
         self.history: list[list[list[Optional[Piece]]]] = []
         self.side_to_move: bool = True
-        self.castling_rights: str = "-"
+        self.castling_rights: int = 0
         self.en_passant_target: Optional[tuple[int, int]] = None
         self.halfmove_clock: int = 0
         self.fullmove_number: int = 1
 
+    # checks if a square is in the bounds of the board
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < 8 and 0 <= y < 8
     
+    # gets the class of a piece based on its abbreviation
     def get_piece_class(self, char: str):
         from .pawn import Pawn
         from .rook import Rook
@@ -27,6 +35,7 @@ class Board:
         from .queen import Queen
         from .king import King
 
+        # dictionary mapping piece abbreviations to their classes
         abbreviation_to_class: dict[str, type[Piece]] = {
             'P': Pawn,
             'R': Rook,
@@ -43,15 +52,47 @@ class Board:
         }
         return abbreviation_to_class[char]
 
-    def _normalize_castling_rights(self, rights: str) -> str:
-        if rights == "-":
-            return rights
-        ordered = "".join(ch for ch in "KQkq" if ch in rights)
-        return ordered if ordered else "-"
+    # turns a castling-rights bitmask into fen text
+    def _castling_rights_to_fen(self) -> str:
+        bits_and_chars = [
+            (Board.CASTLE_WHITE_KINGSIDE, "K"),
+            (Board.CASTLE_WHITE_QUEENSIDE, "Q"),
+            (Board.CASTLE_BLACK_KINGSIDE, "k"),
+            (Board.CASTLE_BLACK_QUEENSIDE, "q")
+        ]
+        rights = [bool(self.castling_rights & bit) for bit, _ in bits_and_chars]
+        if all(not right for right in rights):
+            return "-"
 
+        fen_rights = ""
+        for bit, char in bits_and_chars:
+            if self.castling_rights & bit:
+                fen_rights += char
+        return fen_rights
+
+    # parses fen castling text into a bitmask
+    def _fen_to_castling_rights(self, castling: str) -> int:
+        if castling == "-":
+            return 0
+        if any(ch not in "KQkq" for ch in castling):
+            raise ValueError("Castling rights field must contain only KQkq or '-'.")
+
+        rights = 0
+        char_to_bit = {
+            "K": Board.CASTLE_WHITE_KINGSIDE,
+            "Q": Board.CASTLE_WHITE_QUEENSIDE,
+            "k": Board.CASTLE_BLACK_KINGSIDE,
+            "q": Board.CASTLE_BLACK_QUEENSIDE
+        }
+        for char in castling:
+            rights |= char_to_bit[char]
+        return rights
+
+    # converts a square coordinate to algebraic notation
     def _square_to_algebraic(self, x: int, y: int) -> str:
         return f"{chr(ord('a') + y)}{8 - x}"
     
+    # converts algebraic notation to square coordinates
     def _algebraic_to_square(self, square: str) -> tuple[int, int]:
         if len(square) != 2 or square[0] < "a" or square[0] > "h" or square[1] < "1" or square[1] > "8":
             raise ValueError(f"Invalid en passant target square: {square}")
@@ -59,6 +100,7 @@ class Board:
         x = 8 - int(square[1])
         return x, y
 
+    # takes the current board state and turns it into an FEN string
     def to_fen(self) -> str:
         fen_rows: list[str] = []
         for row in self.grid:
@@ -78,10 +120,11 @@ class Board:
 
         piece_placement = "/".join(fen_rows)
         side = "w" if self.side_to_move else "b"
-        castling = self._normalize_castling_rights(self.castling_rights)
+        castling = self._castling_rights_to_fen()
         en_passant = "-" if self.en_passant_target is None else self._square_to_algebraic(*self.en_passant_target)
         return f"{piece_placement} {side} {castling} {en_passant} {self.halfmove_clock} {self.fullmove_number}"
     
+    # loads the given position based on the FEN string
     def load_fen(self, fen: str) -> None:
         parts = fen.strip().split()
         if len(parts) == 1:
@@ -119,9 +162,7 @@ class Board:
             raise ValueError("Side to move field must be 'w' or 'b'.")
         self.side_to_move = side == "w"
 
-        if castling != "-" and any(ch not in "KQkq" for ch in castling):
-            raise ValueError("Castling rights field must contain only KQkq or '-'.")
-        self.castling_rights = self._normalize_castling_rights(castling)
+        self.castling_rights = self._fen_to_castling_rights(castling)
 
         self.en_passant_target = None if en_passant == "-" else self._algebraic_to_square(en_passant)
         self.halfmove_clock = int(halfmove)
